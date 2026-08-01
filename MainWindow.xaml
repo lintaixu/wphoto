@@ -1,0 +1,185 @@
+<ui:FluentWindow x:Class="PhotoViewer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+        xmlns:local="clr-namespace:PhotoViewer"
+        mc:Ignorable="d"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        Title="照片瀏覽器"
+        Height="900" Width="1500"
+        WindowStartupLocation="CenterScreen"
+        WindowBackdropType="None"
+        Background="#FF0A0A0A"
+        ExtendsContentIntoTitleBar="True"
+        WindowCornerPreference="Round"
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver">
+    <ui:FluentWindow.Resources>
+        <!-- Apple 深色系配色 -->
+        <SolidColorBrush x:Key="MacAccent" Color="#0A84FF"/>
+        <SolidColorBrush x:Key="MacLabel" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="MacSecondaryLabel" Color="#98989D"/>
+        <SolidColorBrush x:Key="MacCardBg" Color="#FF1C1C1E"/>
+        <SolidColorBrush x:Key="MacHover" Color="#14FFFFFF"/>
+        <SolidColorBrush x:Key="MacPhotoBg" Color="#FF000000"/>
+
+        <!-- macOS 簡介面板式的資訊列：左灰標籤、右白值 -->
+        <DataTemplate x:Key="InfoRowTemplate">
+            <Grid Margin="14,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="100"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Label}" Foreground="{StaticResource MacSecondaryLabel}"
+                           FontSize="12" TextWrapping="Wrap" VerticalAlignment="Top"/>
+                <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="{StaticResource MacLabel}"
+                           FontSize="12" TextWrapping="Wrap" VerticalAlignment="Top"
+                           TextAlignment="Right"/>
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource MacSecondaryLabel}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="16,0,16,6"/>
+        </Style>
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource MacCardBg}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Margin" Value="12,0,12,14"/>
+            <Setter Property="Padding" Value="0,8"/>
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <DockPanel>
+        <!-- 標題列 -->
+        <ui:TitleBar DockPanel.Dock="Top" Title="照片瀏覽器" Height="36">
+            <ui:TitleBar.Icon>
+                <ui:SymbolIcon Symbol="Image24" Foreground="{StaticResource MacAccent}"/>
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
+
+        <!-- 工具列 -->
+        <Grid DockPanel.Dock="Top" Margin="12,2,12,8">
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Content="選擇資料夾" Click="ChooseFolder_Click"
+                           Appearance="Secondary" CornerRadius="8" Padding="12,6">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="FolderOpen24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+                <TextBlock x:Name="FolderLabel" Text="尚未選擇資料夾（也可以直接把資料夾拖進視窗）"
+                           Foreground="{StaticResource MacSecondaryLabel}" VerticalAlignment="Center"
+                           Margin="12,0,0,0" FontSize="12"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- 狀態列 -->
+        <Border DockPanel.Dock="Bottom" Padding="14,6">
+            <TextBlock x:Name="StatusLabel" Text="" Foreground="{StaticResource MacSecondaryLabel}"
+                       FontSize="11" HorizontalAlignment="Center"/>
+        </Border>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="250" MinWidth="180"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*" MinWidth="400"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="330" MinWidth="250"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左側：類型篩選 + 檔案清單 -->
+            <DockPanel Grid.Column="0">
+                <ComboBox x:Name="TypeFilter" DockPanel.Dock="Top" Margin="8,0,4,8"
+                          FontSize="12" SelectionChanged="TypeFilter_SelectionChanged"/>
+                <ListBox x:Name="FileList"
+                     Background="Transparent" BorderThickness="0"
+                     Margin="8,0,4,8" FontSize="13"
+                     SelectionChanged="FileList_SelectionChanged"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                                            Padding="10,5" Margin="0,1">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsSelected" Value="True">
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource MacAccent}"/>
+                                        </Trigger>
+                                        <MultiTrigger>
+                                            <MultiTrigger.Conditions>
+                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                <Condition Property="IsSelected" Value="False"/>
+                                            </MultiTrigger.Conditions>
+                                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource MacHover}"/>
+                                        </MultiTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <Border Background="#CC8E5A2B" CornerRadius="4" Padding="5,1" Margin="0,0,7,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding RawBadgeVisibility}">
+                                <TextBlock Text="RAW" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                            </Border>
+                            <Border Background="#CC2B5A8E" CornerRadius="4" Padding="5,1" Margin="0,0,7,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding VideoBadgeVisibility}">
+                                <TextBlock Text="影片" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                            </Border>
+                            <TextBlock Text="{Binding Name}" Foreground="{StaticResource MacLabel}"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
+
+            <!-- 中間：影像 -->
+            <Border Grid.Column="2" Background="{StaticResource MacPhotoBg}" CornerRadius="10" Margin="0,0,0,8">
+                <Grid>
+                    <Image x:Name="MainImage" Stretch="Uniform" StretchDirection="DownOnly"
+                           RenderOptions.BitmapScalingMode="HighQuality" Margin="10"/>
+                    <vlc:VideoView x:Name="VideoViewControl" Visibility="Collapsed" Margin="10"/>
+                    <TextBlock x:Name="PlaceholderText" Text="選擇資料夾開始瀏覽照片"
+                               Foreground="#5A5A5E" FontSize="17"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <GridSplitter Grid.Column="3" HorizontalAlignment="Stretch" Background="Transparent"/>
+
+            <!-- 右側：資訊面板（macOS 簡介風卡片） -->
+            <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="拍攝資訊" Style="{StaticResource CardTitle}" Margin="26,4,16,6"/>
+                    <Border Style="{StaticResource Card}">
+                        <ItemsControl x:Name="FileInfoList" ItemTemplate="{StaticResource InfoRowTemplate}"/>
+                    </Border>
+                    <TextBlock x:Name="KeyTitle" Text="主要參數" Style="{StaticResource CardTitle}"
+                               Margin="26,0,16,6" Visibility="Collapsed"/>
+                    <Border x:Name="KeyCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                        <ItemsControl x:Name="KeyInfoList" ItemTemplate="{StaticResource InfoRowTemplate}"/>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</ui:FluentWindow>
