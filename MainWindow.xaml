@@ -152,11 +152,23 @@
 
             <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
 
-            <!-- 中間：影像 -->
+            <!-- 中間：影像（滾輪縮放、拖曳平移、雙擊還原） -->
             <Border Grid.Column="2" Background="{StaticResource MacPhotoBg}" CornerRadius="10" Margin="0,0,0,8">
-                <Grid>
+                <Grid x:Name="ZoomHost" ClipToBounds="True" Background="Transparent"
+                      MouseWheel="ZoomHost_MouseWheel"
+                      MouseLeftButtonDown="ZoomHost_MouseLeftButtonDown"
+                      MouseLeftButtonUp="ZoomHost_MouseLeftButtonUp"
+                      MouseMove="ZoomHost_MouseMove">
                     <Image x:Name="MainImage" Stretch="Uniform" StretchDirection="DownOnly"
-                           RenderOptions.BitmapScalingMode="HighQuality" Margin="10"/>
+                           RenderOptions.BitmapScalingMode="HighQuality" Margin="10"
+                           RenderTransformOrigin="0,0">
+                        <Image.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ImgScale"/>
+                                <TranslateTransform x:Name="ImgPan"/>
+                            </TransformGroup>
+                        </Image.RenderTransform>
+                    </Image>
                     <vlc:VideoView x:Name="VideoViewControl" Visibility="Collapsed" Margin="10"/>
                     <TextBlock x:Name="PlaceholderText" Text="選擇資料夾開始瀏覽照片"
                                Foreground="#5A5A5E" FontSize="17"

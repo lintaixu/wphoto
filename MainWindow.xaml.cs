@@ -74,6 +74,76 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         VideoViewControl.Visibility = Visibility.Collapsed;
     }
 
+    // ---------- 縮放與平移 ----------
+    double _zoom = 1.0;
+    System.Windows.Point _dragStart;
+    bool _dragging;
+
+    void ResetZoom()
+    {
+        _zoom = 1.0;
+        ImgScale.ScaleX = ImgScale.ScaleY = 1.0;
+        ImgPan.X = ImgPan.Y = 0;
+    }
+
+    void ZoomHost_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (MainImage.Source == null || VideoViewControl.Visibility == Visibility.Visible)
+            return;
+
+        double factor = e.Delta > 0 ? 1.25 : 0.8;
+        double newZoom = Math.Clamp(_zoom * factor, 1.0, 10.0);
+        if (Math.Abs(newZoom - _zoom) < 0.001)
+            return;
+
+        // 以游標位置為中心縮放
+        var pos = e.GetPosition(ZoomHost);
+        double ratio = newZoom / _zoom;
+        ImgPan.X = pos.X - (pos.X - ImgPan.X) * ratio;
+        ImgPan.Y = pos.Y - (pos.Y - ImgPan.Y) * ratio;
+        _zoom = newZoom;
+        ImgScale.ScaleX = ImgScale.ScaleY = newZoom;
+
+        if (_zoom <= 1.001)
+            ResetZoom();
+        StatusLabel.Text = _zoom > 1 ? $"縮放 {_zoom * 100:F0}%（雙擊還原）" : "縮放 100%";
+        e.Handled = true;
+    }
+
+    void ZoomHost_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2)
+        {
+            ResetZoom();
+            StatusLabel.Text = "縮放 100%";
+            return;
+        }
+        if (_zoom > 1 && MainImage.Source != null)
+        {
+            _dragging = true;
+            _dragStart = e.GetPosition(ZoomHost);
+            ZoomHost.CaptureMouse();
+            ZoomHost.Cursor = Cursors.SizeAll;
+        }
+    }
+
+    void ZoomHost_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _dragging = false;
+        ZoomHost.ReleaseMouseCapture();
+        ZoomHost.Cursor = Cursors.Arrow;
+    }
+
+    void ZoomHost_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragging)
+            return;
+        var pos = e.GetPosition(ZoomHost);
+        ImgPan.X += pos.X - _dragStart.X;
+        ImgPan.Y += pos.Y - _dragStart.Y;
+        _dragStart = pos;
+    }
+
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         // 空白鍵：影片播放/暫停
@@ -256,6 +326,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (token != _loadToken) return; // 使用者已切到別張
 
             PlaceholderText.Visibility = Visibility.Collapsed;
+            ResetZoom();
             MainImage.Source = result.img;
             FillInfo(path, result.img.PixelWidth, result.img.PixelHeight, result.key);
             StatusLabel.Text = $"{item.Name} — {result.img.PixelWidth} x {result.img.PixelHeight}";
@@ -311,6 +382,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         // 拍攝時間等 metadata（MP4/MOV 可讀）
         rows.AddRange(SafeReadExif(item.Path));
 
+        ResetZoom();
         MainImage.Source = null;
         MainImage.Visibility = Visibility.Collapsed;
         PlaceholderText.Visibility = Visibility.Collapsed;
