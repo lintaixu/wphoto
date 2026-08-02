@@ -46,6 +46,37 @@ Two modes at startup · 啟動時選擇模式：
 
 </details>
 
+## Playback capabilities · 播放能力與限制
+
+Everything mainstream opens and plays — the limits below are about *presentation quality*, inherited from the LibVLC 3 engine (same as VLC itself):
+
+| Video | Status |
+|---|---|
+| H.265/HEVC 10-bit, 4K high-bitrate | ✅ Full support (hardware-accelerated + software decode) |
+| HDR10 | ⚠️ Plays, tone-mapped to SDR for display |
+| HDR10+ | ⚠️ Dynamic metadata ignored, treated as HDR10 |
+| Dolby Vision (hybrid, with HDR10 base layer) | ✅ Plays via base layer |
+| Dolby Vision Profile 5 (no base layer) | ⚠️ Known LibVLC 3 color-shift issue (purple/green tint) |
+
+| Audio | Status |
+|---|---|
+| DD+ (E-AC-3), AC-3 | ✅ Full decode |
+| TrueHD, DTS-HD MA | ✅ Decodes |
+| Dolby Atmos | ⚠️ Core 5.1/7.1 only — the object/height layer is ignored; downmixed to your output device |
+
+<details>
+<summary>中文說明</summary>
+
+主流最高規格的檔案**都播得開**，以下限制是「呈現品質」層面，繼承自 LibVLC 3 引擎（與 VLC 播放器相同）：
+
+- **H.265 10-bit 4K 高碼率**：完全支援（硬體加速＋軟解）
+- **HDR10 / HDR10+**：可播放，但會 tone-map 成 SDR 顯示；HDR10+ 動態 metadata 忽略
+- **Dolby Vision**：Hybrid（帶 HDR10 底層）正常播；純 Profile 5 檔案有 LibVLC 3 已知的紫綠色偏問題
+- **DD+ / AC-3 / TrueHD / DTS-HD MA**：正常解碼
+- **Dolby Atmos**：只解核心 5.1/7.1 聲道，天空聲道物件層忽略，依輸出裝置下混
+
+</details>
+
 ## Download · 下載
 
 Grab the latest zip from [Releases](https://github.com/lintaixu/wphoto/releases), unzip, run `PhotoViewer.exe`. No installation, no .NET runtime, no codecs required.
