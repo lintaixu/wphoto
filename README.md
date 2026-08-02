@@ -11,6 +11,9 @@ Two modes at startup · 啟動時選擇模式：
 
 ![modes](docs/screenshot-modes.png)
 
+**UI in your language** — Traditional Chinese, Simplified Chinese, and English. Auto-detected from your system, switchable anytime (mode screen or toolbar), remembered across sessions.
+**三語介面**——繁體中文、简体中文、English，依系統語言自動選擇，隨時可切換並記住偏好。
+
 ## Photo mode · 照片模式
 
 - **20+ RAW formats** — RAF, ARW, CR2/CR3, NEF, DNG, ORF, RW2 and more (via LibRaw). Embedded-preview fast path, full decode as fallback

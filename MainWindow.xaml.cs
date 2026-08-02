@@ -55,16 +55,63 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     readonly ObservableCollection<EpisodeItem> _episodes = new();
     int _thumbToken;
 
+    bool _suppressLangEvent;
+
     public MainWindow()
     {
         InitializeComponent();
         FileList.ItemsSource = _files;
         EpisodeList.ItemsSource = _episodes;
+
+        // 語言選單反映目前語言（Loc.Init 已在 App 啟動時執行）
+        _suppressLangEvent = true;
+        foreach (ComboBoxItem it in LangSelect.Items)
+            if ((string)it.Tag == Loc.Current)
+                LangSelect.SelectedItem = it;
+        _suppressLangEvent = false;
+
         InitVideoPlayer();
 
         var args = Environment.GetCommandLineArgs();
         if (args.Length > 1 && System.IO.Directory.Exists(args[1]))
             _pendingFolder = args[1]; // 等使用者選完模式再開
+    }
+
+    void LangSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressLangEvent || LangSelect.SelectedItem is not ComboBoxItem it)
+            return;
+        Loc.Apply((string)it.Tag);
+
+        // DynamicResource 綁定的文字會自動更新；由程式碼設定的文字手動刷新
+        if (ModeOverlay.Visibility != Visibility.Visible)
+        {
+            AppTitleBar.Title = Loc.T(_mode == AppMode.Photo ? "AppTitlePhoto" : "AppTitleVideo");
+            if (MainImage.Source == null && !VideoActive)
+                PlaceholderText.Text = Loc.T(_mode == AppMode.Photo ? "PlaceholderPhoto" : "PlaceholderVideo");
+        }
+        if (_allPaths.Count == 0)
+            FolderLabel.Text = Loc.T("NoFolderHint");
+
+        // 類型下拉選單的「全部」項目換語言重建（保留目前選擇位置）
+        if (TypeFilter.ItemsSource is List<string> old && old.Count > 0)
+        {
+            int idx = TypeFilter.SelectedIndex;
+            var rebuilt = new List<string>(old) { [0] = FilterAll };
+            _suppressFilterEvent = true;
+            TypeFilter.ItemsSource = rebuilt;
+            TypeFilter.SelectedIndex = idx;
+            _suppressFilterEvent = false;
+        }
+    }
+
+    void OverlayLang_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not string lang)
+            return;
+        foreach (ComboBoxItem it in LangSelect.Items)
+            if ((string)it.Tag == lang)
+                LangSelect.SelectedItem = it; // 觸發 LangSelect_SelectionChanged → Loc.Apply
     }
 
     void PhotoMode_Click(object sender, RoutedEventArgs e) => StartMode(AppMode.Photo);
@@ -73,8 +120,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     void StartMode(AppMode mode)
     {
         _mode = mode;
-        AppTitleBar.Title = mode == AppMode.Photo ? "wphoto — 照片模式" : "wphoto — 看劇模式";
-        PlaceholderText.Text = mode == AppMode.Photo ? "選擇資料夾開始瀏覽照片" : "選擇資料夾開始看劇";
+        AppTitleBar.Title = Loc.T(mode == AppMode.Photo ? "AppTitlePhoto" : "AppTitleVideo");
+        PlaceholderText.Text = Loc.T(mode == AppMode.Photo ? "PlaceholderPhoto" : "PlaceholderVideo");
         ModeOverlay.Visibility = Visibility.Collapsed;
 
         if (_pendingFolder != null)
@@ -101,7 +148,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         MainImage.Visibility = Visibility.Visible;
         PlaceholderText.Visibility = Visibility.Visible;
         ClearInfo();
-        FolderLabel.Text = "尚未選擇資料夾（也可以直接把資料夾拖進視窗）";
+        FolderLabel.Text = Loc.T("NoFolderHint");
         StatusLabel.Text = "";
         ModeOverlay.Visibility = Visibility.Visible;
     }
@@ -124,7 +171,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         catch (Exception ex)
         {
-            StatusLabel.Text = $"⚠ 影片播放引擎初始化失敗：{ex.Message}（照片瀏覽不受影響）";
+            StatusLabel.Text = string.Format(Loc.T("PlayerInitFail"), ex.Message);
         }
     }
 
@@ -190,7 +237,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             return;
         var items = _player.SpuDescription
             .Select(t => new SubtitleOption(
-                t.Id == -1 ? "關閉字幕" : (string.IsNullOrWhiteSpace(t.Name) ? $"字幕軌 {t.Id}" : t.Name!),
+                t.Id == -1 ? Loc.T("SubOff")
+                           : (string.IsNullOrWhiteSpace(t.Name) ? string.Format(Loc.T("SubTrack"), t.Id) : t.Name!),
                 t.Id))
             .ToList();
         _suppressSubEvent = true;
@@ -243,7 +291,9 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
         if (_zoom <= 1.001)
             ResetZoom();
-        StatusLabel.Text = _zoom > 1 ? $"縮放 {_zoom * 100:F0}%（雙擊還原）" : "縮放 100%";
+        StatusLabel.Text = _zoom > 1
+            ? string.Format(Loc.T("ZoomPct"), (_zoom * 100).ToString("F0"))
+            : Loc.T("Zoom100");
         e.Handled = true;
     }
 
@@ -252,7 +302,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (e.ClickCount == 2)
         {
             ResetZoom();
-            StatusLabel.Text = "縮放 100%";
+            StatusLabel.Text = Loc.T("Zoom100");
             return;
         }
         if (_zoom > 1 && MainImage.Source != null)
@@ -499,7 +549,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     void ChooseFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new OpenFolderDialog { Title = "選擇照片資料夾" };
+        var dlg = new OpenFolderDialog { Title = Loc.T("FolderDialogTitle") };
         if (dlg.ShowDialog() == true)
             OpenFolder(dlg.FolderName);
     }
@@ -536,7 +586,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         int scanToken = ++_scanToken;
         AppMode mode = _mode;
         FolderLabel.Text = folder;
-        StatusLabel.Text = "掃描資料夾中…";
+        StatusLabel.Text = Loc.T("Scanning");
         _files.Clear();
 
         var paths = await Task.Run(() =>
@@ -566,7 +616,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     string _rootFolder = "";
     bool _suppressFilterEvent;
 
-    const string FilterAll = "全部類型";
+    static string FilterAll => Loc.T("AllTypes");
 
     /// <summary>副檔名 → 類型名稱（JPG/JPEG 等同義副檔名合併顯示）</summary>
     static string TypeLabel(string path)
@@ -600,8 +650,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
                 _files.Add(new FileItem { Path = p, Root = _rootFolder });
 
         StatusLabel.Text = _mode == AppMode.Photo
-            ? $"共 {_files.Count} 張照片（RAW {_files.Count(f => f.IsRaw)} 張）"
-            : $"共 {_files.Count} 部影片";
+            ? string.Format(Loc.T("PhotoCount"), _files.Count, _files.Count(f => f.IsRaw))
+            : string.Format(Loc.T("VideoCount"), _files.Count);
 
         if (_files.Count > 0)
         {
@@ -630,9 +680,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             MainImage.Source = null;
             MainImage.Visibility = Visibility.Visible;
             PlaceholderText.Visibility = Visibility.Visible;
-            PlaceholderText.Text = _mode == AppMode.Photo
-                ? "這個資料夾裡沒有支援的照片格式"
-                : "這個資料夾裡沒有支援的影片格式";
+            PlaceholderText.Text = Loc.T(_mode == AppMode.Photo ? "NoPhotos" : "NoVideos");
             ClearInfo();
         }
     }
@@ -682,7 +730,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         VideoViewControl.Visibility = Visibility.Visible;
         EpisodePicker.Visibility = Visibility.Visible;
         ClearInfo();
-        StatusLabel.Text = $"選擇要播放的影片（共 {_files.Count} 部）";
+        StatusLabel.Text = string.Format(Loc.T("PickEpisode"), _files.Count);
         LoadThumbsAsync(); // 續載還沒好的封面
     }
 
@@ -724,7 +772,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         EpisodePicker.Visibility = Visibility.Collapsed;
         int token = ++_loadToken;
         string path = item.Path;
-        StatusLabel.Text = $"讀取中… {item.Name}";
+        StatusLabel.Text = string.Format(Loc.T("Loading"), item.Name);
 
         if (item.IsVideo)
         {
@@ -757,8 +805,8 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (token != _loadToken) return;
             MainImage.Source = null;
             PlaceholderText.Visibility = Visibility.Visible;
-            PlaceholderText.Text = "⚠ 無法讀取這張照片";
-            StatusLabel.Text = $"⚠ 讀取失敗：{ex.Message}";
+            PlaceholderText.Text = Loc.T("CantReadPhoto");
+            StatusLabel.Text = string.Format(Loc.T("ReadFail"), ex.Message);
             FillInfo(path, 0, 0, SafeReadExif(path));
         }
     }
@@ -767,7 +815,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (_libVLC == null || _player == null)
         {
-            StatusLabel.Text = "⚠ 影片播放引擎未初始化，無法播放";
+            StatusLabel.Text = Loc.T("PlayerNotInit");
             return;
         }
 
@@ -819,24 +867,24 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
             var rows = new List<InfoRow>();
             if (media.Duration > 0)
-                rows.Add(new InfoRow("時長", TimeSpan.FromMilliseconds(media.Duration).ToString(@"hh\:mm\:ss")));
+                rows.Add(new InfoRow(Loc.T("Duration"), TimeSpan.FromMilliseconds(media.Duration).ToString(@"hh\:mm\:ss")));
             foreach (var t in media.Tracks)
             {
                 if (t.TrackType == TrackType.Video)
                 {
-                    rows.Add(new InfoRow("解析度", $"{t.Data.Video.Width} x {t.Data.Video.Height}"));
+                    rows.Add(new InfoRow(Loc.T("Resolution"), $"{t.Data.Video.Width} x {t.Data.Video.Height}"));
                     if (t.Data.Video.FrameRateDen > 0)
-                        rows.Add(new InfoRow("影格率", $"{t.Data.Video.FrameRateNum / (double)t.Data.Video.FrameRateDen:F2} fps"));
-                    rows.Add(new InfoRow("視訊編碼", FourCC(t.Codec)));
+                        rows.Add(new InfoRow(Loc.T("FrameRate"), $"{t.Data.Video.FrameRateNum / (double)t.Data.Video.FrameRateDen:F2} fps"));
+                    rows.Add(new InfoRow(Loc.T("VideoCodec"), FourCC(t.Codec)));
                 }
                 else if (t.TrackType == TrackType.Audio)
                 {
-                    rows.Add(new InfoRow("音訊編碼", FourCC(t.Codec)));
-                    rows.Add(new InfoRow("音訊", $"{t.Data.Audio.Channels} 聲道 / {t.Data.Audio.Rate} Hz"));
+                    rows.Add(new InfoRow(Loc.T("AudioCodec"), FourCC(t.Codec)));
+                    rows.Add(new InfoRow(Loc.T("AudioInfo"), string.Format(Loc.T("AudioFmt"), t.Data.Audio.Channels, t.Data.Audio.Rate)));
                 }
             }
             if (subFiles.Count > 0)
-                rows.Add(new InfoRow("外掛字幕", $"{subFiles.Count} 個檔案"));
+                rows.Add(new InfoRow(Loc.T("ExtSubs"), string.Format(Loc.T("ExtSubsCount"), subFiles.Count)));
             rows.AddRange(SafeReadExif(item.Path)); // 拍攝時間等（MP4/MOV 可讀）
 
             Dispatcher.Invoke(() =>
@@ -861,7 +909,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         };
         _spuTimer.Start();
 
-        StatusLabel.Text = $"{item.Name} — 播放中（空白鍵：播放/暫停）";
+        StatusLabel.Text = string.Format(Loc.T("Playing"), item.Name);
     }
 
     static string FourCC(uint codec)
@@ -886,11 +934,11 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var fi = new FileInfo(path);
         var basic = new List<InfoRow>
         {
-            new("檔名", fi.Name),
-            new("檔案大小", HumanSize(fi.Length)),
+            new(Loc.T("FileName"), fi.Name),
+            new(Loc.T("FileSize"), HumanSize(fi.Length)),
         };
         if (w > 0)
-            basic.Add(new InfoRow("顯示尺寸", $"{w} x {h}"));
+            basic.Add(new InfoRow(Loc.T("DisplaySize"), $"{w} x {h}"));
 
         FileInfoList.ItemsSource = basic;
         KeyInfoList.ItemsSource = key;

@@ -67,35 +67,43 @@
         <!-- 工具列 -->
         <Grid x:Name="ToolbarRow" DockPanel.Dock="Top" Margin="12,2,12,8">
             <StackPanel Orientation="Horizontal">
-                <ui:Button Content="選擇資料夾" Click="ChooseFolder_Click"
+                <ui:Button Content="{DynamicResource L.ChooseFolder}" Click="ChooseFolder_Click"
                            Appearance="Secondary" CornerRadius="8" Padding="12,6">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="FolderOpen24"/>
                     </ui:Button.Icon>
                 </ui:Button>
-                <TextBlock x:Name="FolderLabel" Text="尚未選擇資料夾（也可以直接把資料夾拖進視窗）"
+                <TextBlock x:Name="FolderLabel" Text="{DynamicResource L.NoFolderHint}"
                            Foreground="{StaticResource MacSecondaryLabel}" VerticalAlignment="Center"
                            Margin="12,0,0,0" FontSize="12"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <TextBlock x:Name="SubtitleLabel" Text="字幕" Foreground="{StaticResource MacSecondaryLabel}"
+                <TextBlock x:Name="SubtitleLabel" Text="{DynamicResource L.Subtitle}"
+                           Foreground="{StaticResource MacSecondaryLabel}"
                            VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12" Visibility="Collapsed"/>
                 <ComboBox x:Name="SubtitleSelect" MinWidth="170" MaxWidth="260" FontSize="12"
                           Visibility="Collapsed" DisplayMemberPath="Name" Margin="0,0,12,0"
                           SelectionChanged="SubtitleSelect_SelectionChanged"
                           DropDownOpened="SubtitleSelect_DropDownOpened"/>
-                <ui:Button x:Name="EpisodesBtn" Content="選集" Click="EpisodesBtn_Click" Visibility="Collapsed"
+                <ui:Button x:Name="EpisodesBtn" Content="{DynamicResource L.Episodes}" Click="EpisodesBtn_Click"
+                           Visibility="Collapsed"
                            Appearance="Secondary" CornerRadius="8" Padding="12,6" Margin="0,0,12,0">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="Grid24"/>
                     </ui:Button.Icon>
                 </ui:Button>
-                <ui:Button Content="切換模式" Click="SwitchMode_Click"
-                           Appearance="Secondary" CornerRadius="8" Padding="12,6">
+                <ui:Button Content="{DynamicResource L.SwitchMode}" Click="SwitchMode_Click"
+                           Appearance="Secondary" CornerRadius="8" Padding="12,6" Margin="0,0,12,0">
                     <ui:Button.Icon>
                         <ui:SymbolIcon Symbol="ArrowSwap24"/>
                     </ui:Button.Icon>
                 </ui:Button>
+                <ComboBox x:Name="LangSelect" FontSize="12" MinWidth="110"
+                          SelectionChanged="LangSelect_SelectionChanged">
+                    <ComboBoxItem Content="繁體中文" Tag="zh-Hant"/>
+                    <ComboBoxItem Content="简体中文" Tag="zh-Hans"/>
+                    <ComboBoxItem Content="English" Tag="en"/>
+                </ComboBox>
             </StackPanel>
         </Grid>
 
@@ -161,7 +169,8 @@
                             <Border Background="#CC2B5A8E" CornerRadius="4" Padding="5,1" Margin="0,0,7,0"
                                     VerticalAlignment="Center"
                                     Visibility="{Binding VideoBadgeVisibility}">
-                                <TextBlock Text="影片" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                <TextBlock Text="{DynamicResource L.VideoBadge}" Foreground="White"
+                                           FontSize="9" FontWeight="Bold"/>
                             </Border>
                             <TextBlock Text="{Binding Name}" Foreground="{StaticResource MacLabel}"
                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -270,7 +279,8 @@
                                         <ComboBoxItem Content="2.0x"/>
                                     </ComboBox>
                                     <ui:Button Grid.Column="5" Appearance="Transparent" Click="Fullscreen_Click"
-                                               Padding="6" CornerRadius="6" ToolTip="全螢幕 (F11)">
+                                               Padding="6" CornerRadius="6"
+                                               ToolTip="{DynamicResource L.FullscreenTip}">
                                         <ui:Button.Icon>
                                             <ui:SymbolIcon Symbol="FullScreenMaximize24" Foreground="White"/>
                                         </ui:Button.Icon>
@@ -279,7 +289,7 @@
                             </Border>
                         </Grid>
                     </vlc:VideoView>
-                    <TextBlock x:Name="PlaceholderText" Text="選擇資料夾開始瀏覽照片"
+                    <TextBlock x:Name="PlaceholderText" Text="{DynamicResource L.PlaceholderPhoto}"
                                Foreground="#5A5A5E" FontSize="17"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Grid>
@@ -290,11 +300,11 @@
             <!-- 右側：資訊面板（macOS 簡介風卡片） -->
             <ScrollViewer Grid.Column="4" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
                 <StackPanel>
-                    <TextBlock Text="拍攝資訊" Style="{StaticResource CardTitle}" Margin="26,4,16,6"/>
+                    <TextBlock Text="{DynamicResource L.ShootingInfo}" Style="{StaticResource CardTitle}" Margin="26,4,16,6"/>
                     <Border Style="{StaticResource Card}">
                         <ItemsControl x:Name="FileInfoList" ItemTemplate="{StaticResource InfoRowTemplate}"/>
                     </Border>
-                    <TextBlock x:Name="KeyTitle" Text="主要參數" Style="{StaticResource CardTitle}"
+                    <TextBlock x:Name="KeyTitle" Text="{DynamicResource L.KeyParams}" Style="{StaticResource CardTitle}"
                                Margin="26,0,16,6" Visibility="Collapsed"/>
                     <Border x:Name="KeyCard" Style="{StaticResource Card}" Visibility="Collapsed">
                         <ItemsControl x:Name="KeyInfoList" ItemTemplate="{StaticResource InfoRowTemplate}"/>
@@ -309,16 +319,16 @@
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <TextBlock Text="wphoto" FontSize="36" FontWeight="Bold" Foreground="White"
                        HorizontalAlignment="Center"/>
-            <TextBlock Text="選擇使用模式" FontSize="14" Foreground="{StaticResource MacSecondaryLabel}"
+            <TextBlock Text="{DynamicResource L.ChooseMode}" FontSize="14" Foreground="{StaticResource MacSecondaryLabel}"
                        HorizontalAlignment="Center" Margin="0,8,0,32"/>
             <StackPanel Orientation="Horizontal">
                 <ui:Button Click="PhotoMode_Click" Width="220" Height="180" Margin="0,0,24,0"
                            Appearance="Secondary" CornerRadius="14" Cursor="Hand">
                     <StackPanel>
                         <TextBlock Text="🖼️" FontSize="52" HorizontalAlignment="Center"/>
-                        <TextBlock Text="照片模式" FontSize="17" FontWeight="SemiBold" Foreground="White"
+                        <TextBlock Text="{DynamicResource L.PhotoMode}" FontSize="17" FontWeight="SemiBold" Foreground="White"
                                    HorizontalAlignment="Center" Margin="0,12,0,4"/>
-                        <TextBlock Text="RAW · JPEG · HEIF · 拍攝資訊" FontSize="11"
+                        <TextBlock Text="{DynamicResource L.PhotoModeDesc}" FontSize="11"
                                    Foreground="{StaticResource MacSecondaryLabel}" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </ui:Button>
@@ -326,12 +336,20 @@
                            Appearance="Secondary" CornerRadius="14" Cursor="Hand">
                     <StackPanel>
                         <TextBlock Text="🎬" FontSize="52" HorizontalAlignment="Center"/>
-                        <TextBlock Text="看劇模式" FontSize="17" FontWeight="SemiBold" Foreground="White"
+                        <TextBlock Text="{DynamicResource L.VideoMode}" FontSize="17" FontWeight="SemiBold" Foreground="White"
                                    HorizontalAlignment="Center" Margin="0,12,0,4"/>
-                        <TextBlock Text="MP4 · MKV · MTS · 字幕切換" FontSize="11"
+                        <TextBlock Text="{DynamicResource L.VideoModeDesc}" FontSize="11"
                                    Foreground="{StaticResource MacSecondaryLabel}" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </ui:Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,30,0,0">
+                <ui:Button Content="繁體中文" Tag="zh-Hant" Click="OverlayLang_Click"
+                           Appearance="Transparent" FontSize="12" Padding="10,4" Margin="4,0"/>
+                <ui:Button Content="简体中文" Tag="zh-Hans" Click="OverlayLang_Click"
+                           Appearance="Transparent" FontSize="12" Padding="10,4" Margin="4,0"/>
+                <ui:Button Content="English" Tag="en" Click="OverlayLang_Click"
+                           Appearance="Transparent" FontSize="12" Padding="10,4" Margin="4,0"/>
             </StackPanel>
         </StackPanel>
     </Grid>
