@@ -22,18 +22,20 @@ public static class ImageLoader
         ".heic", ".heif", ".hif"   // Fuji/Sony HEIF（Magick.NET 解碼，不依賴系統擴充）
     };
 
-    // Fuji: MOV/MP4；Sony: XAVC S/HS (MP4)、AVCHD (MTS/M2TS)、專業機 MXF
+    // Fuji: MOV/MP4；Sony: XAVC S/HS (MP4)、AVCHD (MTS/M2TS)、專業機 MXF；另支援 MKV
     public static readonly HashSet<string> VideoExts = new(StringComparer.OrdinalIgnoreCase)
     {
-        ".mp4", ".mov", ".m4v", ".mts", ".m2ts", ".avi", ".mxf"
+        ".mp4", ".mov", ".m4v", ".mts", ".m2ts", ".avi", ".mxf", ".mkv"
     };
 
     public static bool IsRaw(string path) => RawExts.Contains(Path.GetExtension(path));
 
     public static bool IsVideo(string path) => VideoExts.Contains(Path.GetExtension(path));
 
-    public static bool IsSupported(string path) =>
-        IsRaw(path) || IsVideo(path) || StandardExts.Contains(Path.GetExtension(path));
+    public static bool IsImage(string path) =>
+        IsRaw(path) || StandardExts.Contains(Path.GetExtension(path));
+
+    public static bool IsSupported(string path) => IsImage(path) || IsVideo(path);
 
     /// <summary>讀取影像（背景執行緒安全，回傳前已 Freeze）</summary>
     public static BitmapSource Load(string path)

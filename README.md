@@ -1,32 +1,48 @@
 # wphoto
 
-**Blazing-fast RAW photo viewer & culler for Fujifilm / Sony shooters.**
-Opens an 80 MB RAF in a blink by reading the camera's embedded full-size preview — no waiting for a full RAW decode.
+**Blazing-fast RAW photo viewer & culler for Fujifilm / Sony shooters — with a built-in theater mode for your video library.**
+Opens an 80 MB RAF in a blink by reading the camera's embedded full-size preview, and plays 10-bit H.265 MKV without installing a single codec.
 
-**專為 Fuji / Sony 使用者打造的極速 RAW 篩片工具**——直接讀取相機內嵌的全尺寸預覽，80 MB 的 RAF 也能秒開。
+**專為 Fuji / Sony 使用者打造的極速 RAW 篩片工具，內建看劇模式**——RAW 秒開、4K HEVC 直接播。
 
 ![screenshot](docs/screenshot.png)
 
-## Features · 功能
+Two modes at startup · 啟動時選擇模式：
+
+![modes](docs/screenshot-modes.png)
+
+## Photo mode · 照片模式
 
 - **20+ RAW formats** — RAF, ARW, CR2/CR3, NEF, DNG, ORF, RW2 and more (via LibRaw). Embedded-preview fast path, full decode as fallback
-- **Every Fuji / Sony capture format** — JPEG, HEIF (.HIF), MOV, MP4 (XAVC S/HS), MTS/M2TS (AVCHD)
-- **Video playback built in** — bundled LibVLC plays 10-bit H.265 without installing any system codecs
+- **JPEG / HEIF (.HIF)** — every Fuji / Sony still format, HEIF decoded without system extensions
 - **Full shooting info panel** — camera, lens, ISO, shutter, aperture, focal length, exposure mode, GPS…
 - **Zoom & pan** — mouse-wheel zoom up to 1000%, drag to pan, double-click to reset
 - **Recursive folder scan** with file-type filter (only shows types that actually exist in the folder)
-- **Dark, minimal UI** — pure black background that keeps your photos front and center
+
+## Theater mode · 看劇模式
+
+- **Episode picker with covers** — open a whole season folder and pick an episode from a thumbnail grid (Netflix-style)
+- **Plays everything** — MP4 (XAVC S/HS), MOV, MKV, MTS/M2TS (AVCHD), AVI, MXF via bundled LibVLC; 10-bit H.265 / Dolby Vision files just work
+- **Subtitles** — switch embedded subtitle tracks, auto-loads external .srt/.ass/.ssa/.sub/.vtt from the folder (incl. `Subs` subfolder)
+- **Full playback controls** — seekable progress bar, playback speed 0.5x–2.0x, play/pause
+- **YouTube-style fullscreen** — true edge-to-edge, controls auto-hide when idle and reappear on mouse move
 
 <details>
 <summary>中文功能說明</summary>
 
-- **20+ 種 RAW 格式**——RAF、ARW、CR2/CR3、NEF、DNG、ORF、RW2 等（LibRaw 解碼），優先讀內嵌預覽、秒開大檔
-- **Fuji / Sony 全部拍攝格式**——JPEG、HEIF (.HIF)、MOV、MP4 (XAVC S/HS)、MTS/M2TS (AVCHD)
-- **內建影片播放**——內附 LibVLC，10-bit H.265 直接播，不用裝任何系統解碼器
-- **完整拍攝資訊面板**——相機、鏡頭、ISO、快門、光圈、焦距、曝光模式、GPS…
-- **縮放與平移**——滾輪縮放最大 1000%、拖曳平移、雙擊還原
-- **遞迴掃描子資料夾**，依檔案類型篩選（選單只列出資料夾中實際存在的類型）
-- **深色極簡介面**——純黑背景，讓照片成為主角
+**照片模式**
+- 20+ 種 RAW 格式（RAF、ARW、CR2/CR3、NEF、DNG…），優先讀內嵌預覽、秒開大檔
+- JPEG / HEIF (.HIF) 全支援，HEIF 不需系統擴充
+- 完整拍攝資訊面板：相機、鏡頭、ISO、快門、光圈、焦距、GPS…
+- 滾輪縮放（最大 1000%）、拖曳平移、雙擊還原
+- 遞迴掃描子資料夾、依類型篩選
+
+**看劇模式**
+- 封面選集畫面：選整季資料夾後用縮圖卡片挑集數
+- 內建 LibVLC：MP4、MOV、MKV、MTS/M2TS、AVI、MXF 全都能播，10-bit H.265 免裝解碼器
+- 字幕：內嵌字幕軌切換、自動載入同資料夾（含 Subs）的外掛字幕
+- 進度條拖曳跳轉、0.5x–2.0x 倍速、播放/暫停
+- YouTube 式全螢幕：完全滿版、控制列閒置自動隱藏
 
 </details>
 
@@ -40,11 +56,14 @@ Grab the latest zip from [Releases](https://github.com/lintaixu/wphoto/releases)
 
 | Action | Input |
 |---|---|
-| Next / previous file | `↑` `↓` `←` `→` |
-| Zoom | Mouse wheel |
+| Next / previous file | `↑` `↓` (photo mode also `←` `→`) |
+| Zoom photo | Mouse wheel |
 | Pan (when zoomed) | Left-drag |
 | Reset zoom | Double-click |
 | Play / pause video | `Space` |
+| Seek −10s / +10s | `←` `→` |
+| Fullscreen | `F11` (exit: `Esc`) |
+| Episode picker | 「選集」 toolbar button |
 | Open folder | Button, or drag & drop a folder onto the window |
 
 ## Build from source · 從原始碼建置

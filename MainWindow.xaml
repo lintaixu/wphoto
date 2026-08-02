@@ -55,16 +55,17 @@
         </Style>
     </ui:FluentWindow.Resources>
 
+    <Grid>
     <DockPanel>
         <!-- 標題列 -->
-        <ui:TitleBar DockPanel.Dock="Top" Title="照片瀏覽器" Height="36">
+        <ui:TitleBar x:Name="AppTitleBar" DockPanel.Dock="Top" Title="wphoto" Height="36">
             <ui:TitleBar.Icon>
                 <ui:SymbolIcon Symbol="Image24" Foreground="{StaticResource MacAccent}"/>
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 
         <!-- 工具列 -->
-        <Grid DockPanel.Dock="Top" Margin="12,2,12,8">
+        <Grid x:Name="ToolbarRow" DockPanel.Dock="Top" Margin="12,2,12,8">
             <StackPanel Orientation="Horizontal">
                 <ui:Button Content="選擇資料夾" Click="ChooseFolder_Click"
                            Appearance="Secondary" CornerRadius="8" Padding="12,6">
@@ -76,21 +77,41 @@
                            Foreground="{StaticResource MacSecondaryLabel}" VerticalAlignment="Center"
                            Margin="12,0,0,0" FontSize="12"/>
             </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock x:Name="SubtitleLabel" Text="字幕" Foreground="{StaticResource MacSecondaryLabel}"
+                           VerticalAlignment="Center" Margin="0,0,8,0" FontSize="12" Visibility="Collapsed"/>
+                <ComboBox x:Name="SubtitleSelect" MinWidth="170" MaxWidth="260" FontSize="12"
+                          Visibility="Collapsed" DisplayMemberPath="Name" Margin="0,0,12,0"
+                          SelectionChanged="SubtitleSelect_SelectionChanged"
+                          DropDownOpened="SubtitleSelect_DropDownOpened"/>
+                <ui:Button x:Name="EpisodesBtn" Content="選集" Click="EpisodesBtn_Click" Visibility="Collapsed"
+                           Appearance="Secondary" CornerRadius="8" Padding="12,6" Margin="0,0,12,0">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="Grid24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+                <ui:Button Content="切換模式" Click="SwitchMode_Click"
+                           Appearance="Secondary" CornerRadius="8" Padding="12,6">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon Symbol="ArrowSwap24"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+            </StackPanel>
         </Grid>
 
         <!-- 狀態列 -->
-        <Border DockPanel.Dock="Bottom" Padding="14,6">
+        <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Padding="14,6">
             <TextBlock x:Name="StatusLabel" Text="" Foreground="{StaticResource MacSecondaryLabel}"
                        FontSize="11" HorizontalAlignment="Center"/>
         </Border>
 
         <Grid>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250" MinWidth="180"/>
-                <ColumnDefinition Width="4"/>
+                <ColumnDefinition x:Name="LeftCol" Width="250" MinWidth="180"/>
+                <ColumnDefinition x:Name="LeftSplitCol" Width="4"/>
                 <ColumnDefinition Width="*" MinWidth="400"/>
-                <ColumnDefinition Width="4"/>
-                <ColumnDefinition Width="330" MinWidth="250"/>
+                <ColumnDefinition x:Name="RightSplitCol" Width="4"/>
+                <ColumnDefinition x:Name="RightCol" Width="330" MinWidth="250"/>
             </Grid.ColumnDefinitions>
 
             <!-- 左側：類型篩選 + 檔案清單 -->
@@ -152,8 +173,9 @@
 
             <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent"/>
 
-            <!-- 中間：影像（滾輪縮放、拖曳平移、雙擊還原） -->
-            <Border Grid.Column="2" Background="{StaticResource MacPhotoBg}" CornerRadius="10" Margin="0,0,0,8">
+            <!-- 中間：影像（滾輪縮放、拖曳平移、雙擊還原）＋影片疊層控制列 -->
+            <Border x:Name="CenterBorder" Grid.Column="2" Background="{StaticResource MacPhotoBg}"
+                    CornerRadius="10" Margin="0,0,0,8">
                 <Grid x:Name="ZoomHost" ClipToBounds="True" Background="Transparent"
                       MouseWheel="ZoomHost_MouseWheel"
                       MouseLeftButtonDown="ZoomHost_MouseLeftButtonDown"
@@ -169,7 +191,94 @@
                             </TransformGroup>
                         </Image.RenderTransform>
                     </Image>
-                    <vlc:VideoView x:Name="VideoViewControl" Visibility="Collapsed" Margin="10"/>
+                    <vlc:VideoView x:Name="VideoViewControl" Visibility="Collapsed" Margin="10">
+                        <!-- 疊在影片上的前景層：偵測滑鼠移動、承載控制列（YouTube 式自動隱藏）。
+                             背景 alpha=1：視覺上透明但可命中，否則滑鼠事件會穿透 -->
+                        <Grid x:Name="VideoOverlay" Background="#01000000" Focusable="True"
+                              MouseMove="VideoOverlay_MouseMove"
+                              MouseLeftButtonDown="VideoOverlay_MouseDown"
+                              PreviewKeyDown="Window_PreviewKeyDown">
+                            <!-- 封面選集：疊在影片視窗上，影片視窗保持存在，點封面播放才不會卡。
+                                 底色包在 Border 上（WPF-UI 的 ScrollViewer 樣板不畫 Background） -->
+                            <Border x:Name="EpisodePicker" Visibility="Collapsed" Background="#FF121214">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                                <ItemsControl x:Name="EpisodeList">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <ui:Button Appearance="Transparent" Padding="0" Margin="8"
+                                                       CornerRadius="10" Cursor="Hand"
+                                                       Click="Episode_Click" Tag="{Binding}">
+                                                <StackPanel Width="224">
+                                                    <Border CornerRadius="10" Background="#FF1C1C1E"
+                                                            Height="126" ClipToBounds="True">
+                                                        <Grid>
+                                                            <TextBlock Text="🎬" FontSize="36"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            <Image Source="{Binding Thumb}" Stretch="UniformToFill"/>
+                                                        </Grid>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Name}" Foreground="White" FontSize="12"
+                                                               Margin="2,7,2,2" TextWrapping="Wrap" MaxHeight="36"
+                                                               TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            </Border>
+                            <Border x:Name="VideoControls" VerticalAlignment="Bottom"
+                                    Margin="18,0,18,14" Background="#E6141416"
+                                    CornerRadius="10" Padding="12,8" Visibility="Collapsed">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ui:Button x:Name="PlayPauseBtn" Grid.Column="0" Appearance="Transparent"
+                                               Click="PlayPause_Click" Padding="6" CornerRadius="6">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon x:Name="PlayPauseIcon" Symbol="Pause24" Foreground="White"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                    <TextBlock x:Name="TimeCurrent" Grid.Column="1" Text="0:00:00"
+                                               Foreground="#CCCCCC" FontSize="12"
+                                               VerticalAlignment="Center" Margin="8,0"/>
+                                    <Slider x:Name="PositionSlider" Grid.Column="2" VerticalAlignment="Center"
+                                            Minimum="0" Maximum="1000" IsMoveToPointEnabled="True"
+                                            ValueChanged="PositionSlider_ValueChanged"/>
+                                    <TextBlock x:Name="TimeTotal" Grid.Column="3" Text="0:00:00"
+                                               Foreground="#CCCCCC" FontSize="12"
+                                               VerticalAlignment="Center" Margin="8,0"/>
+                                    <ComboBox x:Name="SpeedSelect" Grid.Column="4" FontSize="12" MinWidth="80"
+                                              Margin="4,0" SelectedIndex="2"
+                                              SelectionChanged="SpeedSelect_SelectionChanged">
+                                        <ComboBoxItem Content="0.5x"/>
+                                        <ComboBoxItem Content="0.75x"/>
+                                        <ComboBoxItem Content="1.0x"/>
+                                        <ComboBoxItem Content="1.25x"/>
+                                        <ComboBoxItem Content="1.5x"/>
+                                        <ComboBoxItem Content="2.0x"/>
+                                    </ComboBox>
+                                    <ui:Button Grid.Column="5" Appearance="Transparent" Click="Fullscreen_Click"
+                                               Padding="6" CornerRadius="6" ToolTip="全螢幕 (F11)">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon Symbol="FullScreenMaximize24" Foreground="White"/>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </vlc:VideoView>
                     <TextBlock x:Name="PlaceholderText" Text="選擇資料夾開始瀏覽照片"
                                Foreground="#5A5A5E" FontSize="17"
                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -194,4 +303,37 @@
             </ScrollViewer>
         </Grid>
     </DockPanel>
+
+    <!-- 啟動模式選單（避開標題列，讓視窗仍可拖曳與關閉） -->
+    <Grid x:Name="ModeOverlay" Background="#FF0A0A0A" Margin="0,36,0,0">
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="wphoto" FontSize="36" FontWeight="Bold" Foreground="White"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="選擇使用模式" FontSize="14" Foreground="{StaticResource MacSecondaryLabel}"
+                       HorizontalAlignment="Center" Margin="0,8,0,32"/>
+            <StackPanel Orientation="Horizontal">
+                <ui:Button Click="PhotoMode_Click" Width="220" Height="180" Margin="0,0,24,0"
+                           Appearance="Secondary" CornerRadius="14" Cursor="Hand">
+                    <StackPanel>
+                        <TextBlock Text="🖼️" FontSize="52" HorizontalAlignment="Center"/>
+                        <TextBlock Text="照片模式" FontSize="17" FontWeight="SemiBold" Foreground="White"
+                                   HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                        <TextBlock Text="RAW · JPEG · HEIF · 拍攝資訊" FontSize="11"
+                                   Foreground="{StaticResource MacSecondaryLabel}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </ui:Button>
+                <ui:Button Click="VideoMode_Click" Width="220" Height="180"
+                           Appearance="Secondary" CornerRadius="14" Cursor="Hand">
+                    <StackPanel>
+                        <TextBlock Text="🎬" FontSize="52" HorizontalAlignment="Center"/>
+                        <TextBlock Text="看劇模式" FontSize="17" FontWeight="SemiBold" Foreground="White"
+                                   HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                        <TextBlock Text="MP4 · MKV · MTS · 字幕切換" FontSize="11"
+                                   Foreground="{StaticResource MacSecondaryLabel}" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </ui:Button>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+    </Grid>
 </ui:FluentWindow>

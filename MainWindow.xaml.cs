@@ -24,6 +24,21 @@ public class FileItem
     public Visibility VideoBadgeVisibility => IsVideo ? Visibility.Visible : Visibility.Collapsed;
 }
 
+public class EpisodeItem : System.ComponentModel.INotifyPropertyChanged
+{
+    public required string Path { get; init; }
+    public required string Name { get; init; }
+
+    System.Windows.Media.Imaging.BitmapSource? _thumb;
+    public System.Windows.Media.Imaging.BitmapSource? Thumb
+    {
+        get => _thumb;
+        set { _thumb = value; PropertyChanged?.Invoke(this, new(nameof(Thumb))); }
+    }
+
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+}
+
 public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 {
     readonly ObservableCollection<FileItem> _files = new();
@@ -32,15 +47,63 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     MediaPlayer? _player;
     Media? _currentMedia;
 
+    public enum AppMode { Photo, Video }
+
+    AppMode _mode = AppMode.Photo;
+    string? _pendingFolder;
+
+    readonly ObservableCollection<EpisodeItem> _episodes = new();
+    int _thumbToken;
+
     public MainWindow()
     {
         InitializeComponent();
         FileList.ItemsSource = _files;
+        EpisodeList.ItemsSource = _episodes;
         InitVideoPlayer();
 
         var args = Environment.GetCommandLineArgs();
         if (args.Length > 1 && System.IO.Directory.Exists(args[1]))
-            OpenFolder(args[1]);
+            _pendingFolder = args[1]; // 等使用者選完模式再開
+    }
+
+    void PhotoMode_Click(object sender, RoutedEventArgs e) => StartMode(AppMode.Photo);
+    void VideoMode_Click(object sender, RoutedEventArgs e) => StartMode(AppMode.Video);
+
+    void StartMode(AppMode mode)
+    {
+        _mode = mode;
+        AppTitleBar.Title = mode == AppMode.Photo ? "wphoto — 照片模式" : "wphoto — 看劇模式";
+        PlaceholderText.Text = mode == AppMode.Photo ? "選擇資料夾開始瀏覽照片" : "選擇資料夾開始看劇";
+        ModeOverlay.Visibility = Visibility.Collapsed;
+
+        if (_pendingFolder != null)
+        {
+            string f = _pendingFolder;
+            _pendingFolder = null;
+            OpenFolder(f);
+        }
+    }
+
+    void SwitchMode_Click(object sender, RoutedEventArgs e)
+    {
+        _loadToken++;
+        _scanToken++;
+        _thumbToken++;
+        StopVideo();
+        _episodes.Clear();
+        EpisodePicker.Visibility = Visibility.Collapsed;
+        EpisodesBtn.Visibility = Visibility.Collapsed;
+        _files.Clear();
+        _allPaths.Clear();
+        TypeFilter.ItemsSource = null;
+        MainImage.Source = null;
+        MainImage.Visibility = Visibility.Visible;
+        PlaceholderText.Visibility = Visibility.Visible;
+        ClearInfo();
+        FolderLabel.Text = "尚未選擇資料夾（也可以直接把資料夾拖進視窗）";
+        StatusLabel.Text = "";
+        ModeOverlay.Visibility = Visibility.Visible;
     }
 
     void InitVideoPlayer()
@@ -67,11 +130,85 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     void StopVideo()
     {
-        if (_player is { IsPlaying: true } || _player?.Media != null)
-            _player.Stop();
-        _currentMedia?.Dispose();
+        _spuTimer?.Stop();
+        _progressTimer?.Stop();
+        _hideControlsTimer?.Stop();
+        VideoOverlay.Cursor = null;
+        var player = _player;
+        var media = _currentMedia;
         _currentMedia = null;
+        if (player != null && (player.IsPlaying || player.Media != null))
+            Task.Run(() =>
+            {
+                // Stop 在大檔/HDD 上可能耗時數百毫秒，放背景執行緒避免卡 UI
+                try { player.Stop(); } catch { }
+                media?.Dispose();
+            });
+        else
+            media?.Dispose();
         VideoViewControl.Visibility = Visibility.Collapsed;
+        VideoControls.Visibility = Visibility.Collapsed;
+        SubtitleLabel.Visibility = Visibility.Collapsed;
+        SubtitleSelect.Visibility = Visibility.Collapsed;
+        SubtitleSelect.ItemsSource = null;
+    }
+
+    // ---------- 字幕 ----------
+    record SubtitleOption(string Name, int SpuId);
+
+    System.Windows.Threading.DispatcherTimer? _spuTimer;
+    bool _suppressSubEvent;
+
+    /// <summary>找同資料夾（含 Subs 子資料夾）的外掛字幕檔，同名的排最前</summary>
+    static List<string> FindSubtitleFiles(string videoPath)
+    {
+        var subExts = new[] { ".srt", ".ass", ".ssa", ".sub", ".vtt" };
+        string dir = System.IO.Path.GetDirectoryName(videoPath)!;
+        string baseName = System.IO.Path.GetFileNameWithoutExtension(videoPath);
+        var result = new List<string>();
+        try
+        {
+            IEnumerable<string> candidates = System.IO.Directory.EnumerateFiles(dir);
+            string subsDir = System.IO.Path.Combine(dir, "Subs");
+            if (System.IO.Directory.Exists(subsDir))
+                candidates = candidates.Concat(System.IO.Directory.EnumerateFiles(subsDir));
+            result = candidates
+                .Where(f => subExts.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+                .OrderByDescending(f => System.IO.Path.GetFileNameWithoutExtension(f)
+                    .StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                .Take(15)
+                .ToList();
+        }
+        catch { }
+        return result;
+    }
+
+    /// <summary>把目前的字幕軌清單（內嵌 + 外掛）填進下拉選單</summary>
+    void RefreshSubtitleList(bool force = false)
+    {
+        if (_player == null || (!force && SubtitleSelect.IsDropDownOpen))
+            return;
+        var items = _player.SpuDescription
+            .Select(t => new SubtitleOption(
+                t.Id == -1 ? "關閉字幕" : (string.IsNullOrWhiteSpace(t.Name) ? $"字幕軌 {t.Id}" : t.Name!),
+                t.Id))
+            .ToList();
+        _suppressSubEvent = true;
+        int current = _player.Spu;
+        SubtitleSelect.ItemsSource = items;
+        SubtitleSelect.SelectedItem = items.FirstOrDefault(i => i.SpuId == current) ?? items.FirstOrDefault();
+        _suppressSubEvent = false;
+    }
+
+    void SubtitleSelect_DropDownOpened(object? sender, EventArgs e)
+    {
+        RefreshSubtitleList(force: true);
+    }
+
+    void SubtitleSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_suppressSubEvent && _player != null && SubtitleSelect.SelectedItem is SubtitleOption o)
+            _player.SetSpu(o.SpuId);
     }
 
     // ---------- 縮放與平移 ----------
@@ -144,13 +281,211 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         _dragStart = pos;
     }
 
+    // ---------- 影片控制：進度、倍速、全螢幕 ----------
+    System.Windows.Threading.DispatcherTimer? _progressTimer;
+    bool _updatingSliderFromTimer;
+    bool _fullscreen;
+    double _savedLeft, _savedTop, _savedWidth, _savedHeight;
+    WindowState _savedState;
+    GridLength _savedLeftColWidth, _savedRightColWidth;
+    double _savedLeftColMin, _savedRightColMin;
+
+    bool VideoActive => VideoViewControl.Visibility == Visibility.Visible && _player != null;
+
+    static string FmtTime(long ms) => TimeSpan.FromMilliseconds(Math.Max(0, ms)).ToString(@"h\:mm\:ss");
+
+    void StartProgressTimer()
+    {
+        _progressTimer ??= CreateProgressTimer();
+        _progressTimer.Start();
+    }
+
+    System.Windows.Threading.DispatcherTimer CreateProgressTimer()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        t.Tick += (_, _) =>
+        {
+            if (!VideoActive) return;
+            PlayPauseIcon.Symbol = _player!.IsPlaying
+                ? Wpf.Ui.Controls.SymbolRegular.Pause24
+                : Wpf.Ui.Controls.SymbolRegular.Play24;
+            long len = _player.Length;
+            if (len <= 0) return;
+            _updatingSliderFromTimer = true;
+            PositionSlider.Maximum = len;
+            if (!PositionSlider.IsMouseCaptureWithin)
+                PositionSlider.Value = _player.Time;
+            _updatingSliderFromTimer = false;
+            TimeCurrent.Text = FmtTime(_player.Time);
+            TimeTotal.Text = FmtTime(len);
+        };
+        return t;
+    }
+
+    void PositionSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_updatingSliderFromTimer && VideoActive && _player!.Length > 0)
+        {
+            _player.Time = (long)e.NewValue;
+            TimeCurrent.Text = FmtTime((long)e.NewValue);
+        }
+    }
+
+    void PlayPause_Click(object sender, RoutedEventArgs e)
+    {
+        if (VideoActive) _player!.Pause();
+    }
+
+    void SpeedSelect_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_player != null && SpeedSelect.SelectedItem is ContentControl c &&
+            float.TryParse(c.Content?.ToString()?.TrimEnd('x'), out float rate))
+            _player.SetRate(rate);
+    }
+
+    void SeekBy(int seconds)
+    {
+        if (!VideoActive || _player!.Length <= 0) return;
+        _player.Time = Math.Clamp(_player.Time + seconds * 1000L, 0, _player.Length - 500);
+    }
+
+    void Fullscreen_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+
+    // ---------- YouTube 式控制列自動隱藏（僅全螢幕） ----------
+    System.Windows.Threading.DispatcherTimer? _hideControlsTimer;
+
+    void VideoOverlay_MouseMove(object sender, MouseEventArgs e) => ShowVideoControls();
+
+    void VideoOverlay_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // 點影片區把鍵盤焦點收進疊層，Esc / 空白鍵 / 左右鍵才收得到
+        Keyboard.Focus(VideoOverlay);
+    }
+
+    /// <summary>顯示控制列與滑鼠游標；全螢幕時重新起算自動隱藏</summary>
+    void ShowVideoControls()
+    {
+        if (!VideoActive || EpisodePicker.Visibility == Visibility.Visible) return;
+        VideoControls.Visibility = Visibility.Visible;
+        VideoOverlay.Cursor = null;
+        if (_fullscreen)
+        {
+            _hideControlsTimer ??= CreateHideControlsTimer();
+            _hideControlsTimer.Stop();
+            _hideControlsTimer.Start();
+        }
+    }
+
+    System.Windows.Threading.DispatcherTimer CreateHideControlsTimer()
+    {
+        var t = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+        t.Tick += (_, _) =>
+        {
+            t.Stop();
+            // 滑鼠停在控制列上就不藏（跟 YouTube 一樣）
+            if (_fullscreen && VideoActive && !VideoControls.IsMouseOver &&
+                !SpeedSelect.IsDropDownOpen && !SubtitleSelect.IsDropDownOpen)
+            {
+                VideoControls.Visibility = Visibility.Collapsed;
+                VideoOverlay.Cursor = Cursors.None;
+                // 焦點拉回主視窗，Esc 才收得到
+                Activate();
+            }
+        };
+        return t;
+    }
+
+    void ToggleFullscreen()
+    {
+        if (!_fullscreen)
+        {
+            _savedState = WindowState;
+            _savedLeft = Left; _savedTop = Top; _savedWidth = Width; _savedHeight = Height;
+            _savedLeftColWidth = LeftCol.Width; _savedRightColWidth = RightCol.Width;
+            _savedLeftColMin = LeftCol.MinWidth; _savedRightColMin = RightCol.MinWidth;
+
+            AppTitleBar.Visibility = Visibility.Collapsed;
+            ToolbarRow.Visibility = Visibility.Collapsed;
+            StatusBar.Visibility = Visibility.Collapsed;
+            LeftCol.MinWidth = 0; RightCol.MinWidth = 0;
+            LeftCol.Width = new GridLength(0); LeftSplitCol.Width = new GridLength(0);
+            RightCol.Width = new GridLength(0); RightSplitCol.Width = new GridLength(0);
+
+            // 影片完全貼齊螢幕邊緣（去掉邊距與圓角）
+            CenterBorder.Margin = new Thickness(0);
+            CenterBorder.CornerRadius = new CornerRadius(0);
+            VideoViewControl.Margin = new Thickness(0);
+
+            WindowState = WindowState.Normal;
+            Left = 0; Top = 0;
+            Width = SystemParameters.PrimaryScreenWidth;
+            Height = SystemParameters.PrimaryScreenHeight;
+            Topmost = true;
+            _fullscreen = true;
+            ShowVideoControls(); // 起算自動隱藏
+        }
+        else
+        {
+            AppTitleBar.Visibility = Visibility.Visible;
+            ToolbarRow.Visibility = Visibility.Visible;
+            StatusBar.Visibility = Visibility.Visible;
+            LeftCol.MinWidth = _savedLeftColMin; RightCol.MinWidth = _savedRightColMin;
+            LeftCol.Width = _savedLeftColWidth; LeftSplitCol.Width = new GridLength(4);
+            RightCol.Width = _savedRightColWidth; RightSplitCol.Width = new GridLength(4);
+
+            CenterBorder.Margin = new Thickness(0, 0, 0, 8);
+            CenterBorder.CornerRadius = new CornerRadius(10);
+            VideoViewControl.Margin = new Thickness(10);
+
+            Topmost = false;
+            Left = _savedLeft; Top = _savedTop; Width = _savedWidth; Height = _savedHeight;
+            WindowState = _savedState;
+            _fullscreen = false;
+
+            _hideControlsTimer?.Stop();
+            if (VideoActive)
+                VideoControls.Visibility = Visibility.Visible; // 視窗模式恆顯示
+            VideoOverlay.Cursor = null;
+        }
+    }
+
     void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        // 空白鍵：影片播放/暫停
-        if (e.Key == Key.Space && VideoViewControl.Visibility == Visibility.Visible && _player != null)
+        if (SubtitleSelect.IsDropDownOpen || SpeedSelect.IsDropDownOpen)
+            return;
+
+        if (e.Key == Key.F11 && VideoActive)
         {
-            _player.Pause(); // 呼叫一次即在播放/暫停間切換
+            ToggleFullscreen();
             e.Handled = true;
+            return;
+        }
+        if (e.Key == Key.Escape && _fullscreen)
+        {
+            ToggleFullscreen();
+            e.Handled = true;
+            return;
+        }
+        if (!VideoActive)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Space:
+                _player!.Pause(); // 呼叫一次即在播放/暫停間切換
+                ShowVideoControls();
+                e.Handled = true;
+                break;
+            case Key.Left:
+                SeekBy(-10);
+                ShowVideoControls();
+                e.Handled = true;
+                break;
+            case Key.Right:
+                SeekBy(10);
+                ShowVideoControls();
+                e.Handled = true;
+                break;
         }
     }
 
@@ -192,7 +527,14 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     async void OpenFolder(string folder, string? selectFile = null)
     {
+        if (ModeOverlay.Visibility == Visibility.Visible)
+        {
+            _pendingFolder = folder; // 還沒選模式：先記住，選完自動開
+            return;
+        }
+
         int scanToken = ++_scanToken;
+        AppMode mode = _mode;
         FolderLabel.Text = folder;
         StatusLabel.Text = "掃描資料夾中…";
         _files.Clear();
@@ -200,7 +542,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         var paths = await Task.Run(() =>
         {
             var result = new List<string>();
-            ScanFolder(folder, result);
+            ScanFolder(folder, result, mode);
             result.Sort(StringComparer.OrdinalIgnoreCase);
             return result;
         });
@@ -257,12 +599,22 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
             if (filter == null || TypeLabel(p) == filter)
                 _files.Add(new FileItem { Path = p, Root = _rootFolder });
 
-        int rawCount = _files.Count(f => f.IsRaw);
-        int videoCount = _files.Count(f => f.IsVideo);
-        StatusLabel.Text = $"共 {_files.Count} 個檔案（RAW {rawCount}、影片 {videoCount}）";
+        StatusLabel.Text = _mode == AppMode.Photo
+            ? $"共 {_files.Count} 張照片（RAW {_files.Count(f => f.IsRaw)} 張）"
+            : $"共 {_files.Count} 部影片";
 
         if (_files.Count > 0)
         {
+            EpisodesBtn.Visibility = _mode == AppMode.Video ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_mode == AppMode.Video && selectFile == null)
+            {
+                // 看劇模式：先顯示封面選集畫面，讓使用者挑要看哪一集
+                PopulateEpisodes();
+                ShowEpisodePicker();
+                return;
+            }
+
             var target = selectFile != null
                 ? _files.FirstOrDefault(f => string.Equals(f.Path, selectFile, StringComparison.OrdinalIgnoreCase)) ?? _files[0]
                 : _files[0];
@@ -272,25 +624,93 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         }
         else
         {
+            EpisodesBtn.Visibility = Visibility.Collapsed;
+            EpisodePicker.Visibility = Visibility.Collapsed;
             StopVideo();
             MainImage.Source = null;
             MainImage.Visibility = Visibility.Visible;
             PlaceholderText.Visibility = Visibility.Visible;
-            PlaceholderText.Text = "這個資料夾裡沒有支援的照片或影片格式";
+            PlaceholderText.Text = _mode == AppMode.Photo
+                ? "這個資料夾裡沒有支援的照片格式"
+                : "這個資料夾裡沒有支援的影片格式";
             ClearInfo();
         }
     }
 
-    /// <summary>遞迴掃描資料夾，跳過沒有權限的目錄</summary>
-    static void ScanFolder(string dir, List<string> result)
+    // ---------- 看劇模式：封面選集 ----------
+    void PopulateEpisodes()
+    {
+        _episodes.Clear();
+        foreach (var f in _files)
+            _episodes.Add(new EpisodeItem { Path = f.Path, Name = f.Name });
+        LoadThumbsAsync();
+    }
+
+    /// <summary>背景載入缺少的封面縮圖。先撈系統快取（瞬間），沒有的才現場產生（吃磁碟、可取消）</summary>
+    void LoadThumbsAsync()
+    {
+        int token = ++_thumbToken;
+        var pending = _episodes.Where(ep => ep.Thumb == null).ToList();
+        if (pending.Count == 0)
+            return;
+
+        Task.Run(() =>
+        {
+            foreach (bool cacheOnly in new[] { true, false })
+                foreach (var it in pending)
+                {
+                    if (token != _thumbToken)
+                        return; // 開始播放時會取消，把磁碟讓給影片
+                    if (it.Thumb != null)
+                        continue;
+                    var bmp = ShellThumb.Get(it.Path, 320, cacheOnly);
+                    if (bmp != null)
+                        Dispatcher.BeginInvoke(() => it.Thumb ??= bmp);
+                }
+        });
+    }
+
+    void ShowEpisodePicker()
+    {
+        _loadToken++; // 取消進行中的影像載入
+        StopVideo();
+        FileList.UnselectAll();
+        MainImage.Source = null;
+        MainImage.Visibility = Visibility.Collapsed;
+        PlaceholderText.Visibility = Visibility.Collapsed;
+        // 影片視窗保持存在（選集畫面疊在上面）——之後點封面播放不用重建視窗，才不會卡
+        VideoViewControl.Visibility = Visibility.Visible;
+        EpisodePicker.Visibility = Visibility.Visible;
+        ClearInfo();
+        StatusLabel.Text = $"選擇要播放的影片（共 {_files.Count} 部）";
+        LoadThumbsAsync(); // 續載還沒好的封面
+    }
+
+    void EpisodesBtn_Click(object sender, RoutedEventArgs e) => ShowEpisodePicker();
+
+    void Episode_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is not EpisodeItem ep)
+            return;
+        EpisodePicker.Visibility = Visibility.Collapsed;
+        var item = _files.FirstOrDefault(f => string.Equals(f.Path, ep.Path, StringComparison.OrdinalIgnoreCase));
+        if (item != null)
+        {
+            FileList.SelectedItem = item;
+            FileList.ScrollIntoView(item);
+        }
+    }
+
+    /// <summary>遞迴掃描資料夾（依模式只收照片或影片），跳過沒有權限的目錄</summary>
+    static void ScanFolder(string dir, List<string> result, AppMode mode)
     {
         try
         {
             foreach (var f in System.IO.Directory.EnumerateFiles(dir))
-                if (ImageLoader.IsSupported(f))
+                if (mode == AppMode.Photo ? ImageLoader.IsImage(f) : ImageLoader.IsVideo(f))
                     result.Add(f);
             foreach (var d in System.IO.Directory.EnumerateDirectories(dir))
-                ScanFolder(d, result);
+                ScanFolder(d, result, mode);
         }
         catch (UnauthorizedAccessException) { }
         catch (IOException) { }
@@ -301,6 +721,7 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
         if (FileList.SelectedItem is not FileItem item)
             return;
 
+        EpisodePicker.Visibility = Visibility.Collapsed;
         int token = ++_loadToken;
         string path = item.Path;
         StatusLabel.Text = $"讀取中… {item.Name}";
@@ -344,54 +765,102 @@ public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
 
     async Task ShowVideoAsync(FileItem item, int token)
     {
-        StopVideo();
         if (_libVLC == null || _player == null)
         {
             StatusLabel.Text = "⚠ 影片播放引擎未初始化，無法播放";
             return;
         }
 
-        var media = new Media(_libVLC, new Uri(item.Path));
-        await media.Parse(MediaParseOptions.ParseLocal);
+        _thumbToken++; // 取消封面縮圖產生，磁碟頻寬讓給播放
+        _spuTimer?.Stop();
+        var oldMedia = _currentMedia;
+        _currentMedia = null;
+
+        // 停止舊影片與掃描字幕都是慢速 IO（尤其在 HDD 上），移到背景執行緒避免卡 UI
+        var subFiles = await Task.Run(() =>
+        {
+            try { _player.Stop(); } catch { }
+            oldMedia?.Dispose();
+            return FindSubtitleFiles(item.Path);
+        });
 
         if (token != _loadToken)
-        {
-            media.Dispose();
             return;
-        }
 
-        // 影片資訊
-        var rows = new List<InfoRow>();
-        if (media.Duration > 0)
-            rows.Add(new InfoRow("時長", TimeSpan.FromMilliseconds(media.Duration).ToString(@"hh\:mm\:ss")));
-        foreach (var t in media.Tracks)
-        {
-            if (t.TrackType == TrackType.Video)
-            {
-                rows.Add(new InfoRow("解析度", $"{t.Data.Video.Width} x {t.Data.Video.Height}"));
-                if (t.Data.Video.FrameRateDen > 0)
-                    rows.Add(new InfoRow("影格率", $"{t.Data.Video.FrameRateNum / (double)t.Data.Video.FrameRateDen:F2} fps"));
-                rows.Add(new InfoRow("視訊編碼", FourCC(t.Codec)));
-            }
-            else if (t.TrackType == TrackType.Audio)
-            {
-                rows.Add(new InfoRow("音訊編碼", FourCC(t.Codec)));
-                rows.Add(new InfoRow("音訊", $"{t.Data.Audio.Channels} 聲道 / {t.Data.Audio.Rate} Hz"));
-            }
-        }
-        // 拍攝時間等 metadata（MP4/MOV 可讀）
-        rows.AddRange(SafeReadExif(item.Path));
+        var media = new Media(_libVLC, new Uri(item.Path));
+        foreach (var sub in subFiles)
+            media.AddSlave(MediaSlaveType.Subtitle, 4, new Uri(sub).AbsoluteUri);
 
         ResetZoom();
         MainImage.Source = null;
         MainImage.Visibility = Visibility.Collapsed;
         PlaceholderText.Visibility = Visibility.Collapsed;
         VideoViewControl.Visibility = Visibility.Visible;
+        VideoControls.Visibility = Visibility.Visible;
+        SubtitleLabel.Visibility = Visibility.Visible;
+        SubtitleSelect.Visibility = Visibility.Visible;
 
+        // 每部影片從 1.0x 開始
+        SpeedSelect.SelectedIndex = 2;
+        PositionSlider.Value = 0;
+        TimeCurrent.Text = "0:00:00";
+        TimeTotal.Text = "0:00:00";
+
+        // 先開播（切集立即有反應），影片資訊在背景解析完再補進右側面板
         _currentMedia = media;
         _player.Play(media);
+        StartProgressTimer();
+        FillInfo(item.Path, 0, 0, new List<InfoRow>());
 
-        FillInfo(item.Path, 0, 0, rows);
+        _ = Task.Run(async () =>
+        {
+            await media.Parse(MediaParseOptions.ParseLocal);
+            if (token != _loadToken) return;
+
+            var rows = new List<InfoRow>();
+            if (media.Duration > 0)
+                rows.Add(new InfoRow("時長", TimeSpan.FromMilliseconds(media.Duration).ToString(@"hh\:mm\:ss")));
+            foreach (var t in media.Tracks)
+            {
+                if (t.TrackType == TrackType.Video)
+                {
+                    rows.Add(new InfoRow("解析度", $"{t.Data.Video.Width} x {t.Data.Video.Height}"));
+                    if (t.Data.Video.FrameRateDen > 0)
+                        rows.Add(new InfoRow("影格率", $"{t.Data.Video.FrameRateNum / (double)t.Data.Video.FrameRateDen:F2} fps"));
+                    rows.Add(new InfoRow("視訊編碼", FourCC(t.Codec)));
+                }
+                else if (t.TrackType == TrackType.Audio)
+                {
+                    rows.Add(new InfoRow("音訊編碼", FourCC(t.Codec)));
+                    rows.Add(new InfoRow("音訊", $"{t.Data.Audio.Channels} 聲道 / {t.Data.Audio.Rate} Hz"));
+                }
+            }
+            if (subFiles.Count > 0)
+                rows.Add(new InfoRow("外掛字幕", $"{subFiles.Count} 個檔案"));
+            rows.AddRange(SafeReadExif(item.Path)); // 拍攝時間等（MP4/MOV 可讀）
+
+            Dispatcher.Invoke(() =>
+            {
+                if (token != _loadToken) return;
+                FillInfo(item.Path, 0, 0, rows);
+            });
+        });
+
+        // 字幕軌要等播放器啟動後才註冊完成，開播後刷新幾次清單
+        int refreshes = 0;
+        _spuTimer?.Stop();
+        _spuTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(800)
+        };
+        _spuTimer.Tick += (_, _) =>
+        {
+            RefreshSubtitleList();
+            if (++refreshes >= 5)
+                _spuTimer!.Stop();
+        };
+        _spuTimer.Start();
+
         StatusLabel.Text = $"{item.Name} — 播放中（空白鍵：播放/暫停）";
     }
 
