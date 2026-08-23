@@ -15,6 +15,7 @@
         Background="#FF0A0A0A"
         ExtendsContentIntoTitleBar="True"
         WindowCornerPreference="Round"
+        Icon="pack://application:,,,/app.ico"
         AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver">
     <ui:FluentWindow.Resources>
         <!-- Apple 深色系配色 -->
@@ -60,7 +61,7 @@
         <!-- 標題列 -->
         <ui:TitleBar x:Name="AppTitleBar" DockPanel.Dock="Top" Title="wphoto" Height="36">
             <ui:TitleBar.Icon>
-                <ui:SymbolIcon Symbol="Image24" Foreground="{StaticResource MacAccent}"/>
+                <ui:ImageIcon Source="pack://application:,,,/app.ico"/>
             </ui:TitleBar.Icon>
         </ui:TitleBar>
 

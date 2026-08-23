@@ -82,9 +82,9 @@ Everything mainstream opens and plays — the limits below are about *presentati
 
 ## Download · 下載
 
-Grab the latest zip from [Releases](https://github.com/lintaixu/wphoto/releases), unzip, run `PhotoViewer.exe`. No installation, no .NET runtime, no codecs required.
+Grab the latest zip from [Releases](https://github.com/lintaixu/wphoto/releases), unzip, run `wphoto.exe`. No installation, no .NET runtime, no codecs required.
 
-從 [Releases](https://github.com/lintaixu/wphoto/releases) 下載 zip，解壓縮後直接執行 `PhotoViewer.exe`，免安裝、免 .NET、免解碼器。
+從 [Releases](https://github.com/lintaixu/wphoto/releases) 下載 zip，解壓縮後直接執行 `wphoto.exe`，免安裝、免 .NET、免解碼器。
 
 ## Keyboard & mouse · 操作
 
@@ -112,7 +112,7 @@ Release build:
 dotnet publish PhotoViewer -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
-Ship `PhotoViewer.exe` together with the `libvlc` folder.
+Ship `wphoto.exe` together with the `libvlc` folder.
 
 ## Tech stack · 技術
 
