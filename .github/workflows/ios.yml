@@ -1,0 +1,36 @@
+# iOS 版編譯檢查：在 GitHub 的 macOS runner 上用 Xcode 建置（Windows 上無法編譯 iOS）
+name: iOS build
+
+on:
+  push:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build for iOS Simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project wphoto.xcodeproj -scheme wphoto \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | grep -E "error:|warning:|BUILD|Compiling|Linking|note: Using" || true
+          # 以上 grep 只是精簡輸出；真正的成敗由下面這行決定
+          xcodebuild -project wphoto.xcodeproj -scheme wphoto \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO \
+            build -quiet
